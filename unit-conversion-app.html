@@ -1,0 +1,257 @@
+<html>
+<head>
+<title>Unit Converter | MJKTech</title>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+<link rel="stylesheet" type="text/css" href="css/default.css" />
+<link rel="stylesheet" type="text/css" href="css/pretty-radio-toggle.css" />
+<link rel="stylesheet" type="text/css" href="css/flex-tabs.css" />
+</head>
+<body>
+
+<div class="wrapper">
+	<div class="container">
+
+		<h1>Unit Converter</h1>
+
+		<div class="tabs">
+			<input name="tabs" type="radio" id="tab-1" class="tab-input" checked="checked"/>
+			<label for="tab-1" class="tab-label">Vanilla</label>
+			<div class="tab-panel">
+				<form id="conv_form" class="conv_form">
+
+					<fieldset>
+						<input name="conv-input" type="text" class="conv-input" tabindex="1" autocomplete="off" autofocus />
+					</fieldset>
+
+					<fieldset><div class="conv-mode toggle"></div></fieldset>
+
+					<fieldset>
+						<button name="run-conv" type="submit" class="run-conv" tabindex="2" disabled>Convert</button>
+					</fieldset>
+
+					<h2 class="conv-output"></h2>
+
+				</form>
+			</div>
+		
+			<input name="tabs" type="radio" id="tab-2" class="tab-input"/>
+			<label for="tab-2" class="tab-label">React</label>
+			<div class="tab-panel">
+				<unit-conv-app-react></unit-conv-app-react>
+			</div>
+		</div>
+	</div>
+</div>
+
+
+
+<script>
+	/** Example config... */
+	const tempConversions = {
+		"f-to-c": {from: "°Farenheight", to: "°Celcius", fn: (degF) => (Number(degF) - 32) / (9/5)},
+		"c-to-f": {from: "°Celcius", to: "°Farenheight", fn: (degC) => (Number(degC) * (9/5)) + 32}
+	};
+	
+	class TempInfo {
+		significantTemps = [
+			{f: -459.67, c: -273.15, info: "absolute zero temperature"}, 
+			{f: 32, c: 0.000, info: "freezing/melting point of water"},
+			{f: 70, c: 21.11, info: "room temperature"},
+			{f: 98.6, c: 37.0, info: "average body temperature"},
+			{f: 212, c: 100.0, info: "boiling point of water"}
+		];
+	
+		get (temp, mode) {
+			let from = mode.substring(0,1);
+			let tempInt = parseInt(temp);
+			let info = this.significantTemps.filter((t)=> parseInt(t[from]) === tempInt).map((t)=>t.info);
+			return info.length? info.join(", ") : "";
+		}
+	}
+</script>
+
+
+
+<!-- Vanilla flavour -->
+<script>
+
+	class UnitConversionApp {
+		constructor (form, modes, info) {
+			this.modes = {...modes};
+			this.info = info;
+			this.convForm = form;
+			this.convInput = form.querySelector(".conv-input");
+			this.convOutput = form.querySelector(".conv-output");
+			this.submitButton = form.querySelector(".run-conv");
+			this.modeInput = new ConversionModeInput(
+				form.querySelector(".conv-mode"), 
+				this.modes,
+				this.changeMode
+			);
+			
+			this.changeMode(new FormData(this.convForm).get("conv-mode"));
+			
+			this.convInput.addEventListener("keyup", (e)=> {
+				this.submitButton.disabled = !(this.convInput.value && this.convInput.value.length);
+				this.onSubmit();
+			});
+			this.convForm.addEventListener("submit", this.onSubmit);
+		}
+	
+		changeMode = (mode)=> {
+			this.convMode = mode;
+			this.convInput.setAttribute("placeholder", this.modes[mode].from);
+			this.onSubmit();
+		};
+	
+		onSubmit = (e)=> {
+			if (e) e.preventDefault();
+			this.showResult(this.convInput.value);
+		};
+		
+		showResult(val) {
+			if (!val) return this.convOutput.innerHTML = "";
+			let conv = this.modes[this.convMode];
+			this.convOutput.innerHTML = `<strong class="result">${conv.fn(val).toFixed(2)}</strong> ${conv.to}`;
+			let info = this.info? this.info.get(val, this.convMode) : "";
+			if (info.length) this.convOutput.innerHTML += `<br/>${info}`;
+		}
+	}
+	
+	class ConversionModeInput {
+		nodes = [];
+		id = Math.random().toString(25).substring(2);
+		
+		constructor (container, modes, onChangeMode) {
+			this.modes = {...modes};
+			this.container = container;
+			Object.keys(this.modes).forEach((m, i)=> {
+				let input = this.createInput(m, i===0);
+				let label = this.createLabel(m, input);
+				input.addEventListener("change", (e)=> onChangeMode(e.target.value));
+				this.nodes[i] = input;
+			});
+		}
+		
+		createInput(mode, select) {
+			let input = document.createElement("input");
+			input.setAttribute("type","radio");
+			input.setAttribute("name","conv-mode");
+			input.setAttribute("value", mode);
+			input.setAttribute("id", mode+"-"+this.id);
+			input.checked = select;
+			this.container.appendChild(input);
+			return input;
+		}
+		
+		createLabel(mode, input) {
+			let label = document.createElement("label");
+			label.setAttribute("for", input.getAttribute("id"));
+			label.innerHTML = this.modes[mode].from+" to "+this.modes[mode].to;
+			this.container.appendChild(label);
+			return label;
+		}
+	}
+	
+	let tempConverter = new UnitConversionApp(document.getElementById("conv_form"), tempConversions, new TempInfo());
+</script>
+
+
+
+<!-- React Flavour-->
+<script crossorigin src="https://unpkg.com/react@16/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@16/umd/react-dom.production.min.js"></script>
+<script>
+	
+	class UnitConversionAppReact extends React.Component {
+		constructor(props) {
+			super(props);
+			const {modes, info} = props;
+			this.state = { 
+				modes,
+				mode: Object.keys(modes)[0],
+				inputVal: undefined
+			};
+		}
+
+		render() {
+			const {modes, mode, inputVal} = this.state;
+			const result = inputVal? modes[mode].fn(inputVal).toFixed(2)+" "+modes[mode].to : null;
+			const infoText = this.props.info? this.props.info.get(inputVal, mode) : null;
+			
+			return React.createElement('form', {className: "conv_form", onSubmit: this.onSubmit},
+				React.createElement(ConvFieldset, null, 
+					React.createElement(ConvInput, {placeholder: modes[mode].from, onChange: this.onChangeVal})
+				),
+				React.createElement(ConvFieldset, null, 
+					React.createElement(ConversionModeInputReact, {modes: modes, onChangeMode: this.onChangeMode})
+				),
+				React.createElement(ConvFieldset, null, React.createElement(ConvButton, {disabled: !inputVal})),
+				React.createElement(ConvOutput, {result, infoText})
+			);
+		}
+	
+		onChangeMode = (m)=> this.setState({mode: m});
+	
+		onChangeVal = (e)=> this.setState({inputVal: e.target.value});
+	
+		onSubmit = (e)=> {
+			e && e.preventDefault();
+			this.setState({inputVal: new FormData(e.target).get("conv-input")});
+		};
+	}
+	
+	function ConversionModeInputReact (props) {
+		const [id] = React.useState(Math.random().toString(25).substring(2));
+		const {modes, onChangeMode} = props;
+		let children = [];
+
+		Object.keys(modes).forEach((mode, i)=> {
+			let modeKey = mode+"-"+id
+			let input = React.createElement("input", {
+					type: "radio",
+					name: "conv-mode",
+					value: mode,
+					id: modeKey,
+					key: modeKey,
+					defaultChecked: i===0, 
+					onChange: (e)=> onChangeMode(e.target.value)
+				});
+			let label = React.createElement("label", {
+					htmlFor: modeKey, 
+					key: modeKey+"-label"
+				}, modes[mode].from+" to "+modes[mode].to);
+
+			children.push(input, label);
+		});
+		return React.createElement("div", {className:"conv-mode toggle", children});
+	}
+	
+	function ConvFieldset(props) {
+		return React.createElement("fieldset", {...props})
+	}
+	
+	function ConvInput(props) {
+		return React.createElement("input", {...props, type:"text", name:"conv-input", className:"conv-input", tabIndex:1, autofocus:"true", autoComplete:"off"})
+	}
+	
+	function ConvButton(props) {
+		return React.createElement("button", {...props, type:"submit", name:"run-conv", className:"run-conv", tabIndex:2}, "Convert")
+	}
+	
+	function ConvOutput(props) {
+		const {result, infoText} = props;
+		return result && React.createElement("h2", {className:"conv-output result"}, 
+			React.createElement("strong", null, result),
+			infoText && React.createElement("div", null, infoText)
+		)
+	}
+	
+	const reactTempConverter = (element)=> ReactDOM
+		.render(React.createElement(UnitConversionAppReact, {modes: tempConversions, info: new TempInfo()}), element);
+	
+	reactTempConverter(document.querySelector("unit-conv-app-react"));
+</script>
+
+</body>
+</html>
